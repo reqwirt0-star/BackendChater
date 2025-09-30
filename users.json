@@ -1,4 +1,12 @@
 [
-    { "username": "admin", "password": "admin" },
-    { "username": "manager", "password": "manager" }
+  {
+    "username": "manager",
+    "password": "manager_password",
+    "role": "manager"
+  },
+  {
+    "username": "employee",
+    "password": "employee_password",
+    "role": "employee"
+  }
 ]

@@ -1,0 +1,46 @@
+{
+  "templates": {
+    "en": {
+      "greetings": [
+        "Good day! We are ChaterLab. Do you have experience...",
+        "Hello! This is ChaterLab..."
+      ],
+      "jobDescriptions": [
+        "Job Description:\n📌 Task: Communicate with foreign men...",
+        "Vacancy: Chat Operator..."
+      ],
+      "jobDescriptionsPrime": [
+        "Job Description (Prime):\n📌 Task: Communicate with foreign men..."
+      ],
+      "flirtClosings": [
+        "Please create 10 unique phrases...",
+        "As a test, please write 10 creative lines..."
+      ],
+      "contacts": [
+        "Thank you for completing the test...",
+        "Great job on the test!..."
+      ]
+    },
+    "ru": {
+      "greetings": [
+        "Добрый день! Мы компания ChaterLab...",
+        "Здравствуйте! Это ChaterLab..."
+      ],
+      "jobDescriptions": [
+        "Описание вакансии:\n📌 Задача: Ведение переписки...",
+        "Вакансия: Оператор чата..."
+      ],
+      "jobDescriptionsPrime": [
+        "Описание вакансии (Прайм):\n📌 Задача: Ведение переписки..."
+      ],
+      "flirtClosings": [
+        "Пожалуйста, составьте 10 уникальных фраз...",
+        "В качестве теста, напишите 10 креативных фраз..."
+      ],
+      "contacts": [
+        "Благодарим за выполненное тестовое...",
+        "Отличная работа! Следующий шаг — связаться..."
+      ]
+    }
+  }
+}
