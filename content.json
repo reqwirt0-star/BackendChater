@@ -1,48 +1,89 @@
 {
-  "templates": {
-    "en": {
-      "greetings": [
-        "Good day! We are ChaterLab. Do you have experience...",
-        "Hello! This is ChaterLab..."
-      ],
-      "jobDescriptions": [
-        "Job Description:\n📌 Task: Communicate with foreign men...",
-        "Vacancy: Chat Operator..."
-      ],
-      "jobDescriptionsPrime": [
-        "Job Description (Prime):\n📌 Task: Communicate with foreign men..."
-      ],
-      "flirtClosings": [
-        "Please create 10 unique phrases...",
-        "As a test, please write 10 creative lines..."
-      ],
-      "contacts": [
-        "Thank you for completing the test...",
-        "Great job on the test!..."
+  "layout": [
+    {
+      "id": "section_ru",
+      "title": "Русский контент",
+      "buttons": [
+        {
+          "id": "btn_ru_greeting",
+          "label": "Приветствие",
+          "templates": [
+            "Добрый день! Мы компания ChaterLab...",
+            "Здравствуйте! Это ChaterLab..."
+          ]
+        },
+        {
+          "id": "btn_ru_job",
+          "label": "Описание вакансии",
+          "templates": [
+            "Описание вакансии:\n📌 Задача: Ведение переписки...",
+            "Вакансия: Оператор чата..."
+          ]
+        },
+        {
+          "id": "btn_ru_jobprime",
+          "label": "Описание вакансии (Прайм)",
+          "templates": [
+            "Описание вакансии (Прайм):\n📌 Задача: Ведение переписки..."
+          ]
+        },
+        {
+          "id": "btn_ru_flirt",
+          "label": "Флирт-задание",
+          "templates": [
+            "Пожалуйста, составьте 10 уникальных фраз...",
+            "В качестве теста, напишите 10 креативных фраз..."
+          ]
+        },
+        {
+          "id": "btn_ru_contact",
+          "label": "Контакт",
+          "templates": [
+            "Благодарим за выполненное тестовое...",
+            "Отличная работа! Следующий шаг — связаться..."
+          ]
+        }
       ]
     },
-    "ru": {
-      "greetings": [
-        "Добрый день! Мы компания ChaterLab...",
-        "Здравствуйте! Это ChaterLab..."
-      ],
-      "jobDescriptions": [
-        "Описание вакансии:\n📌 Задача: Ведение переписки...",
-        "Вакансия: Оператор чата..."
-      ],
-      "jobDescriptionsPrime": [
-        "Описание вакансии (Прайм):\n📌 Задача: Ведение переписки..."
-      ],
-      "flirtClosings": [
-        "Пожалуйста, составьте 10 уникальных фраз...",
-        "В качестве теста, напишите 10 креативных фраз..."
-      ],
-      "contacts": [
-        "Благодарим за выполненное тестовое...",
-        "Отличная работа! Следующий шаг — связаться..."
+    {
+      "id": "section_en",
+      "title": "English Content",
+      "buttons": [
+        {
+          "id": "btn_en_greeting",
+          "label": "Greeting",
+          "templates": [
+            "Good day! We are ChaterLab. Do you have experience...",
+            "Hello! This is ChaterLab..."
+          ]
+        },
+        {
+          "id": "btn_en_job",
+          "label": "Job Description",
+          "templates": [
+            "Job Description:\n📌 Task: Communicate with foreign men...",
+            "Vacancy: Chat Operator..."
+          ]
+        },
+        {
+          "id": "btn_en_flirt",
+          "label": "Flirt Task",
+          "templates": [
+            "Please create 10 unique phrases...",
+            "As a test, please write 10 creative lines..."
+          ]
+        },
+        {
+          "id": "btn_en_contact",
+          "label": "Contact",
+          "templates": [
+            "Thank you for completing the test...",
+            "Great job on the test!..."
+          ]
+        }
       ]
     }
-  },
+  ],
   "instructionsContent": {
     "en": "<h3>📖 Instruction</h3><p>Here you can place the full instruction for <b>English-speaking</b> employees. It supports lists, bold text, etc.</p>",
     "ru": "<h3>📖 Инструкция для работы</h3><p>Здесь будет находиться полная инструкция для <b>русскоязычных</b> сотрудников. Ее можно будет редактировать с помощью удобного редактора.</p><ul><li>Пункт 1</li><li>Пункт 2</li></ul>",
