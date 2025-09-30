@@ -1,15 +1,19 @@
-// server/server.js - ФИНАЛЬНАЯ ВЕРСИЯ С БАЗОЙ ДАННЫХ JSONBin
+// server/server.js - ФИНАЛЬНАЯ ВЕРСИЯ С БАЗОЙ ДАННЫХ SUPABASE
 
 // 1. Подключаем пакеты
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const fs = require('fs'); // fs нужен только для чтения users.json
+const fs = require('fs'); 
 const path = require('path');
+const axios = require('axios'); // Используем для работы с Supabase API
 
-// --- ВАЖНО: Вставь сюда свои данные из JSONBin ---
-const JSONBIN_API_KEY = '$2a$10$zYvDQk9drvX9HmsQuIz0WO6i.pahvE86hPhXO2tybjYrVfyjjyWhG'; // Вставь сюда Master Key
-const JSONBIN_BIN_ID = '68dbbcf143b1c97be955565b';             // Вставь сюда ID твоего "бина"
+// --- ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ SUPABASE (для Render) ---
+// ЭТИ КЛЮЧИ ДОЛЖНЫ БЫТЬ УСТАНОВЛЕНЫ В НАСТРОЙКАХ RENDER!
+const SUPABASE_URL = process.env.SUPABASE_URL; // e.g. https://awlbflsbkdlfmhixakwe.supabase.co
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY; 
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY; 
+const CONTENT_ROW_ID = 1; // ID строки (наша таблица app_content)
 // ----------------------------------------------------
 
 
@@ -55,35 +59,46 @@ app.post('/login', (req, res) => {
     }
 });
 
-// 5. Эндпоинт для получения контента (🔥 ИЗМЕНЕН для работы с JSONBin)
+// 5. Эндпоинт для получения контента (ЧТЕНИЕ из SUPABASE)
 app.get('/content', async (req, res) => {
+    // Проверка, что ключи установлены
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        console.error("Supabase ключи не установлены!");
+        return res.status(500).json({ message: "Сервер не настроен для подключения к базе данных." });
+    }
+    
     try {
-        // Делаем запрос к JSONBin, чтобы получить последнюю версию нашего контента
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-            headers: { 'X-Master-Key': JSONBIN_API_KEY }
-        });
-        if (!response.ok) {
-            throw new Error('Не удалось загрузить контент из базы данных');
+        // Запрос на чтение данных (SELECT) из таблицы app_content по ID=1
+        const response = await axios.get(
+            `${SUPABASE_URL}/rest/v1/app_content?select=data&id=eq.${CONTENT_ROW_ID}`,
+            {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                }
+            }
+        );
+        
+        // Supabase вернет массив: [{ data: {...} }]
+        if (response.data && response.data.length > 0) {
+            res.setHeader('Cache-Control', 'no-cache'); 
+            res.status(200).json(response.data[0].data); // Отправляем содержимое поля 'data'
+        } else {
+            res.status(404).json({ message: "Контент не найден в базе данных. Проверьте, что строка с ID=1 заполнена." });
         }
-        
-        const data = await response.json();
-        
-        // Отправляем клиенту контент из "бина"
-        res.setHeader('Cache-Control', 'no-cache'); // Заголовки от кэша оставляем, это полезно
-        res.status(200).json(data.record);
 
     } catch (error) {
-        console.error("Ошибка при получении контента из JSONBin:", error);
+        console.error("Ошибка при получении контента из Supabase:", error.message);
         res.status(500).json({ message: "Ошибка при чтении контента." });
     }
 });
 
-// 6. Эндпоинт для ОБНОВЛЕНИЯ контента (🔥 ИЗМЕНЕН для работы с JSONBin)
+// 6. Эндпоинт для ОБНОВЛЕНИЯ контента (ЗАПИСЬ в SUPABASE)
 app.post('/update-content', async (req, res) => {
     const token = req.headers.authorization;
     const newContent = req.body;
 
-    // Шаг 1: Проверяем, что пользователь - менеджер (эта логика не меняется)
+    // Шаг 1: Проверяем, что пользователь - менеджер (логика аутентификации)
     if (!token || !token.startsWith('secret-auth-token-for-')) {
         return res.status(401).json({ message: 'Неверный токен.' });
     }
@@ -94,31 +109,43 @@ app.post('/update-content', async (req, res) => {
         if (!user || user.role !== 'manager') {
             return res.status(403).json({ message: 'Доступ запрещен.' });
         }
+        
+        // Проверка, что ключ установлен
+        if (!SUPABASE_SERVICE_KEY) {
+            console.error("Supabase Service Key не установлен!");
+            return res.status(500).json({ message: "Сервер не настроен для записи в базу данных." });
+        }
 
-        // Шаг 2: Если проверка пройдена, отправляем данные в JSONBin
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Master-Key': JSONBIN_API_KEY
-            },
-            body: JSON.stringify(newContent)
-        });
 
-        if (!response.ok) {
-            throw new Error('Ошибка при сохранении в базу данных');
+        // Шаг 2: Отправляем данные в Supabase (обновление строки с ID=1)
+        const response = await axios.patch(
+            // Используем PATCH для обновления существующей строки
+            `${SUPABASE_URL}/rest/v1/app_content?id=eq.${CONTENT_ROW_ID}`, 
+            { data: newContent }, // Обновляем столбец 'data'
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_SERVICE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` // Используем SERVICE KEY для записи
+                }
+            }
+        );
+
+        // Проверяем статус ответа
+        if (response.status >= 300) {
+             throw new Error(`Ошибка при сохранении в базу данных: Статус ${response.status}`);
         }
         
         console.log(`Контент успешно обновлен менеджером: ${username}`);
         res.status(200).json({ success: true, message: 'Контент обновлен.' });
 
     } catch (error) {
-        console.error("Ошибка при обновлении контента в JSONBin:", error);
+        console.error("Ошибка при обновлении контента в Supabase:", error.message);
         res.status(500).json({ message: 'Ошибка на сервере при сохранении.' });
     }
 });
 
 // 7. Запускаем сервер
 app.listen(port, () => {
-    console.log(`✅ Server is running on port ${port} with JSONBin integration`);
+    console.log(`✅ Server is running on port ${port} with Supabase integration`);
 });
