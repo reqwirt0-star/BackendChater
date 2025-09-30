@@ -1,11 +1,17 @@
-// server/server.js - ФИНАЛЬНАЯ ВЕРСИЯ С ОТКЛЮЧЕНИЕМ КЭША
+// server/server.js - ФИНАЛЬНАЯ ВЕРСИЯ С БАЗОЙ ДАННЫХ JSONBin
 
 // 1. Подключаем пакеты
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const fs = require('fs');
+const fs = require('fs'); // fs нужен только для чтения users.json
 const path = require('path');
+
+// --- ВАЖНО: Вставь сюда свои данные из JSONBin ---
+const JSONBIN_API_KEY = '$2a$10$zYvDQk9drvX9HmsQuIz0WO6i.pahvE86hPhXO2tybjYrVfyjjyWhG'; // Вставь сюда Master Key
+const JSONBIN_BIN_ID = '68dbbcf143b1c97be955565b';             // Вставь сюда ID твоего "бина"
+// ----------------------------------------------------
+
 
 // 2. Инициализируем приложение
 const app = express();
@@ -29,11 +35,11 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 
-// 3. Пути к нашим JSON файлам
+// 3. Путь к файлу пользователей (остается локальным)
 const usersPath = path.join(__dirname, 'users.json');
-const contentPath = path.join(__dirname, 'content.json');
 
-// 4. Эндпоинт для логина
+
+// 4. Эндпоинт для логина (без изменений)
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
     try {
@@ -49,25 +55,35 @@ app.post('/login', (req, res) => {
     }
 });
 
-// 5. Эндпоинт для получения контента (ИЗМЕНЕН)
-app.get('/content', (req, res) => {
+// 5. Эндпоинт для получения контента (🔥 ИЗМЕНЕН для работы с JSONBin)
+app.get('/content', async (req, res) => {
     try {
-        // 🔥 НОВОЕ: Устанавливаем заголовки, чтобы запретить кэширование этого запроса
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('Expires', '0');
+        // Делаем запрос к JSONBin, чтобы получить последнюю версию нашего контента
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+            headers: { 'X-Master-Key': JSONBIN_API_KEY }
+        });
+        if (!response.ok) {
+            throw new Error('Не удалось загрузить контент из базы данных');
+        }
+        
+        const data = await response.json();
+        
+        // Отправляем клиенту контент из "бина"
+        res.setHeader('Cache-Control', 'no-cache'); // Заголовки от кэша оставляем, это полезно
+        res.status(200).json(data.record);
 
-        const content = JSON.parse(fs.readFileSync(contentPath, 'utf-8'));
-        res.status(200).json(content);
     } catch (error) {
+        console.error("Ошибка при получении контента из JSONBin:", error);
         res.status(500).json({ message: "Ошибка при чтении контента." });
     }
 });
 
-// 6. Эндпоинт для ОБНОВЛЕНИЯ контента
-app.post('/update-content', (req, res) => {
+// 6. Эндпоинт для ОБНОВЛЕНИЯ контента (🔥 ИЗМЕНЕН для работы с JSONBin)
+app.post('/update-content', async (req, res) => {
     const token = req.headers.authorization;
     const newContent = req.body;
+
+    // Шаг 1: Проверяем, что пользователь - менеджер (эта логика не меняется)
     if (!token || !token.startsWith('secret-auth-token-for-')) {
         return res.status(401).json({ message: 'Неверный токен.' });
     }
@@ -78,14 +94,31 @@ app.post('/update-content', (req, res) => {
         if (!user || user.role !== 'manager') {
             return res.status(403).json({ message: 'Доступ запрещен.' });
         }
-        fs.writeFileSync(contentPath, JSON.stringify(newContent, null, 2));
+
+        // Шаг 2: Если проверка пройдена, отправляем данные в JSONBin
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': JSONBIN_API_KEY
+            },
+            body: JSON.stringify(newContent)
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка при сохранении в базу данных');
+        }
+        
+        console.log(`Контент успешно обновлен менеджером: ${username}`);
         res.status(200).json({ success: true, message: 'Контент обновлен.' });
+
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка на сервере.' });
+        console.error("Ошибка при обновлении контента в JSONBin:", error);
+        res.status(500).json({ message: 'Ошибка на сервере при сохранении.' });
     }
 });
 
 // 7. Запускаем сервер
 app.listen(port, () => {
-    console.log(`✅ Server with roles is running on port ${port}`);
+    console.log(`✅ Server is running on port ${port} with JSONBin integration`);
 });
