@@ -1,20 +1,16 @@
-// server/server.js - ВЕРСИЯ С МИГРАЦИЕЙ ПОЛЬЗОВАТЕЛЕЙ В SUPABASE
+// server/server.js - ВЕРСИЯ С ДОБАВЛЕНИЕМ API ДЛЯ ИЗБРАННОГО
 
-// 1. Подключаем пакеты
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const axios = require('axios'); // Используем для работы с Supabase API
-const bcrypt = require('bcryptjs'); // <<< ДОБАВЛЕНО для хеширования паролей
+const axios = require('axios');
+const bcrypt = require('bcryptjs');
 
-// --- ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ SUPABASE (для Render) ---
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const CONTENT_ROW_ID = 1;
-// ----------------------------------------------------
 
-// 2. Инициализируем приложение
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -31,15 +27,21 @@ app.use(cors({
         }
         return callback(null, true);
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'OPTIONS', 'PATCH'], // Добавлен PATCH
     credentials: true
 }));
 app.use(bodyParser.json());
 
-// 3. Путь к файлу пользователей (УДАЛЕНО, больше не используется)
-// const usersPath = path.join(__dirname, 'users.json');
+// Middleware для извлечения username из токена
+function getUsernameFromToken(req) {
+    const token = req.headers.authorization;
+    if (!token || !token.startsWith('secret-auth-token-for-')) {
+        return null;
+    }
+    return token.replace('secret-auth-token-for-', '');
+}
 
-// 4. Эндпоинт для логина (ПОЛНОСТЬЮ ПЕРЕРАБОТАН)
+// Эндпоинт для логина
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -48,33 +50,22 @@ app.post('/login', async (req, res) => {
     }
 
     try {
-        // Ищем пользователя в таблице 'users' в Supabase по имени
         const { data: users, error } = await axios.get(
             `${SUPABASE_URL}/rest/v1/users?select=username,role,password_hash&username=eq.${username}`,
-            {
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                }
-            }
+            { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
         );
 
         if (error) throw new Error(error.message);
-        
         if (!users || users.length === 0) {
             return res.status(401).json({ success: false, message: 'Неверные данные.' });
         }
 
         const user = users[0];
-
-        // Сравниваем предоставленный пароль с хешем в базе данных
         const isPasswordCorrect = await bcrypt.compare(password, user.password_hash);
 
         if (isPasswordCorrect) {
-            // Пароль верный, отправляем токен
             res.status(200).json({ success: true, token: 'secret-auth-token-for-' + user.username, role: user.role });
         } else {
-            // Пароль неверный
             res.status(401).json({ success: false, message: 'Неверные данные.' });
         }
 
@@ -84,98 +75,118 @@ app.post('/login', async (req, res) => {
     }
 });
 
-
-// 5. Эндпоинт для получения контента (без изменений)
+// Эндпоинт для получения контента
 app.get('/content', async (req, res) => {
-    // ... (код остается прежним)
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-        console.error("Supabase ключи не установлены!");
-        return res.status(500).json({ message: "Сервер не настроен для подключения к базе данных." });
-    }
-    
     try {
         const response = await axios.get(
             `${SUPABASE_URL}/rest/v1/app_content?select=data&id=eq.${CONTENT_ROW_ID}`,
-            {
-                headers: {
-                    'apikey': SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                }
-            }
+            { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
         );
         
         if (response.data && response.data.length > 0) {
             res.setHeader('Cache-Control', 'no-cache'); 
             res.status(200).json(response.data[0].data);
         } else {
-            res.status(404).json({ message: "Контент не найден в базе данных. Проверьте, что строка с ID=1 заполнена." });
+            res.status(404).json({ message: "Контент не найден." });
         }
 
     } catch (error) {
-        console.error("Ошибка при получении контента из Supabase:", error.message);
+        console.error("Ошибка при получении контента:", error.message);
         res.status(500).json({ message: "Ошибка при чтении контента." });
     }
 });
 
-// 6. Эндпоинт для ОБНОВЛЕНИЯ контента (Аутентификация изменена)
+// Эндпоинт для ОБНОВЛЕНИЯ контента
 app.post('/update-content', async (req, res) => {
-    const token = req.headers.authorization;
     const newContent = req.body;
+    const username = getUsernameFromToken(req);
 
-    if (!token || !token.startsWith('secret-auth-token-for-')) {
+    if (!username) {
         return res.status(401).json({ message: 'Неверный токен.' });
     }
 
     try {
-        const username = token.replace('secret-auth-token-for-', '');
-        
-        // Теперь проверяем роль пользователя в базе данных, а не в файле
-        const { data: users, error } = await axios.get(
+        const { data: users } = await axios.get(
             `${SUPABASE_URL}/rest/v1/users?select=role&username=eq.${username}`,
             { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
         );
-
-        if (error || !users || users.length === 0) {
-             return res.status(403).json({ message: 'Пользователь не найден.' });
-        }
        
-        const user = users[0];
-        if (user.role !== 'manager') {
+        if (!users || users.length === 0 || users[0].role !== 'manager') {
             return res.status(403).json({ message: 'Доступ запрещен.' });
         }
         
-        if (!SUPABASE_SERVICE_KEY) {
-            console.error("Supabase Service Key не установлен!");
-            return res.status(500).json({ message: "Сервер не настроен для записи в базу данных." });
-        }
-
-        const response = await axios.patch(
+        await axios.patch(
             `${SUPABASE_URL}/rest/v1/app_content?id=eq.${CONTENT_ROW_ID}`, 
             { data: newContent },
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'apikey': SUPABASE_SERVICE_KEY,
-                    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
-                }
-            }
+            { headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
         );
-
-        if (response.status >= 300) {
-             throw new Error(`Ошибка при сохранении в базу данных: Статус ${response.status}`);
-        }
         
         console.log(`Контент успешно обновлен менеджером: ${username}`);
         res.status(200).json({ success: true, message: 'Контент обновлен.' });
 
     } catch (err) {
-        console.error("Ошибка при обновлении контента в Supabase:", err.message);
+        console.error("Ошибка при обновлении контента:", err.message);
         res.status(500).json({ message: 'Ошибка на сервере при сохранении.' });
     }
 });
 
 
-// 7. Запускаем сервер
+// ================== НАЧАЛО: API ДЛЯ ИЗБРАННОГО ==================
+
+// 1. Получить список избранных кнопок пользователя
+app.get('/api/favorites', async (req, res) => {
+    const username = getUsernameFromToken(req);
+    if (!username) {
+        return res.status(401).json({ message: 'Неверный токен.' });
+    }
+
+    try {
+        const { data: users } = await axios.get(
+            `${SUPABASE_URL}/rest/v1/users?select=favorite_buttons&username=eq.${username}`,
+            { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+        );
+
+        if (users && users.length > 0) {
+            // Возвращаем массив ID кнопок или пустой массив, если null
+            res.status(200).json({ favorites: users[0].favorite_buttons || [] });
+        } else {
+            res.status(404).json({ message: 'Пользователь не найден.' });
+        }
+    } catch (error) {
+        console.error("Ошибка при получении избранного:", error.message);
+        res.status(500).json({ message: 'Ошибка на сервере.' });
+    }
+});
+
+// 2. Сохранить (обновить) список избранных кнопок
+app.post('/api/favorites', async (req, res) => {
+    const username = getUsernameFromToken(req);
+    const { favorites } = req.body; // Ожидаем массив ID кнопок
+
+    if (!username) {
+        return res.status(401).json({ message: 'Неверный токен.' });
+    }
+    if (!Array.isArray(favorites)) {
+        return res.status(400).json({ message: 'Неверный формат данных.' });
+    }
+
+    try {
+        await axios.patch(
+            `${SUPABASE_URL}/rest/v1/users?username=eq.${username}`,
+            { favorite_buttons: favorites }, // Обновляем поле
+            { headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } }
+        );
+        res.status(200).json({ success: true, message: 'Избранное обновлено.' });
+    } catch (error) {
+        console.error("Ошибка при сохранении избранного:", error.message);
+        res.status(500).json({ message: 'Ошибка на сервере.' });
+    }
+});
+
+// ================== КОНЕЦ: API ДЛЯ ИЗБРАННОГО ===================
+
+
+// Запускаем сервер
 app.listen(port, () => {
     console.log(`✅ Server is running on port ${port} with Supabase integration`);
 });
