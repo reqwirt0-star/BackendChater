@@ -1,4 +1,4 @@
-// server/server.js - ВЕРСИЯ С КЛЮЧАМИ ДЛЯ ПЕРЕВОДА СООБЩЕНИЙ
+// server/server.js - ВЕРСИЯ С УПРАВЛЕНИЕМ ПОЛЬЗОВАТЕЛЯМИ
 
 const express = require('express');
 const cors = require('cors');
@@ -14,8 +14,22 @@ const CONTENT_ROW_ID = 1;
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH'], credentials: true }));
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS', 'PATCH', 'DELETE'], credentials: true }));
 app.use(bodyParser.json());
+
+// Helper function to check manager role
+async function isManager(req) {
+    const token = req.headers.authorization;
+    if (!token || !token.startsWith('secret-auth-token-for-')) return false;
+    const username = token.replace('secret-auth-token-for-', '');
+    try {
+        const { data: users } = await axios.get(`${SUPABASE_URL}/rest/v1/users?select=role&username=eq.${username}`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+        return users && users.length > 0 && users[0].role === 'manager';
+    } catch (error) {
+        console.error('Error checking manager role:', error);
+        return false;
+    }
+}
 
 function getUsernameFromToken(req) {
     const token = req.headers.authorization;
@@ -45,11 +59,8 @@ app.get('/content', async (req, res) => {
 });
 
 app.post('/update-content', async (req, res) => {
-    const username = getUsernameFromToken(req);
-    if (!username) return res.status(401).json({ message: 'invalid_token' });
+    if (!await isManager(req)) return res.status(403).json({ message: 'access_denied' });
     try {
-        const { data: users } = await axios.get(`${SUPABASE_URL}/rest/v1/users?select=role&username=eq.${username}`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
-        if (!users || users.length === 0 || users[0].role !== 'manager') return res.status(403).json({ message: 'access_denied' });
         await axios.patch(`${SUPABASE_URL}/rest/v1/app_content?id=eq.${CONTENT_ROW_ID}`, { data: req.body }, { headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } });
         res.status(200).json({ success: true, message: 'content_updated_successfully' });
     } catch (err) { res.status(500).json({ message: 'server_error_on_save' }); }
@@ -91,11 +102,8 @@ app.post('/api/track-click', async (req, res) => {
 });
 
 app.get('/api/analytics', async (req, res) => {
-    const username = getUsernameFromToken(req);
-    if (!username) return res.status(401).json({ message: 'invalid_token' });
+    if (!await isManager(req)) return res.status(403).json({ message: 'access_denied' });
     try {
-        const { data: users } = await axios.get(`${SUPABASE_URL}/rest/v1/users?select=role&username=eq.${username}`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
-        if (!users || users.length === 0 || users[0].role !== 'manager') return res.status(403).json({ message: 'access_denied' });
         const period = req.query.period || 'day';
         let interval = '100 year';
         if (period === 'day') interval = '1 day';
@@ -106,6 +114,79 @@ app.get('/api/analytics', async (req, res) => {
         res.status(200).json(stats);
     } catch (err) { res.status(500).json({ message: 'analytics_server_error' }); }
 });
+
+
+// --- NEW USER MANAGEMENT APIS ---
+
+app.get('/api/users', async (req, res) => {
+    if (!await isManager(req)) return res.status(403).json({ message: 'access_denied' });
+    try {
+        const { data: users } = await axios.get(`${SUPABASE_URL}/rest/v1/users?select=id,username,role`, { headers: { 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } });
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: 'server_error_fetching_users' });
+    }
+});
+
+app.post('/api/users/create', async (req, res) => {
+    if (!await isManager(req)) return res.status(403).json({ message: 'access_denied' });
+    
+    const { username, password, role } = req.body;
+    if (!username || !password || !role) {
+        return res.status(400).json({ message: 'missing_user_data' });
+    }
+    if (role !== 'manager' && role !== 'employee') {
+        return res.status(400).json({ message: 'invalid_role' });
+    }
+
+    try {
+        const salt = await bcrypt.genSalt(10);
+        const password_hash = await bcrypt.hash(password, salt);
+
+        const newUser = { username, password_hash, role };
+
+        await axios.post(`${SUPABASE_URL}/rest/v1/users`, newUser, {
+            headers: {
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        res.status(201).json({ success: true, message: 'user_created_successfully' });
+    } catch (error) {
+        if (error.response && error.response.data && error.response.data.message.includes('duplicate key value')) {
+            return res.status(409).json({ message: 'user_already_exists' });
+        }
+        res.status(500).json({ message: 'server_error_creating_user' });
+    }
+});
+
+app.post('/api/users/delete', async (req, res) => {
+    if (!await isManager(req)) return res.status(403).json({ message: 'access_denied' });
+    
+    const { username } = req.body;
+    if (!username) {
+        return res.status(400).json({ message: 'username_not_provided' });
+    }
+    
+    const managerUsername = getUsernameFromToken(req);
+    if (username === managerUsername) {
+        return res.status(400).json({ message: 'cannot_delete_self' });
+    }
+
+    try {
+        await axios.delete(`${SUPABASE_URL}/rest/v1/users?username=eq.${username}`, {
+            headers: {
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+            }
+        });
+        res.status(200).json({ success: true, message: 'user_deleted_successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'server_error_deleting_user' });
+    }
+});
+
 
 app.listen(port, () => {
     console.log(`✅ Server is running on port ${port} with Supabase integration`);
