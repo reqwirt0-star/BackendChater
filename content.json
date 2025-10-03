@@ -38,9 +38,10 @@
         {
           "id": "btn_ru_contact",
           "label": "Контакт",
+          "type": "contact_generator",
+          "manager_ids": ["mgr_anna_ru", "mgr_ivan_ru"],
           "templates": [
-            "Благодарим за выполненное тестовое...",
-            "Отличная работа! Следующий шаг — связаться..."
+            "Благодарим за выполненное тестовое. Отличная работа! Следующий шаг — связаться с менеджером. Пожалуйста, напишите нашему менеджеру в {contact_method}: {manager_contact}"
           ]
         }
       ]
@@ -76,9 +77,10 @@
         {
           "id": "btn_en_contact",
           "label": "Contact",
+          "type": "contact_generator",
+          "manager_ids": ["mgr_john_ph", "mgr_maria_ph"],
           "templates": [
-            "Thank you for completing the test...",
-            "Great job on the test!..."
+            "Thank you for completing the test, great job! The next step is to contact our manager. Please text our manager on {contact_method}: {manager_contact}"
           ]
         }
       ]
@@ -88,5 +90,27 @@
     "en": "<h3>📖 Instruction</h3><p>Here you can place the full instruction for <b>English-speaking</b> employees. It supports lists, bold text, etc.</p>",
     "ru": "<h3>📖 Инструкция для работы</h3><p>Здесь будет находиться полная инструкция для <b>русскоязычных</b> сотрудников. Ее можно будет редактировать с помощью удобного редактора.</p><ul><li>Пункт 1</li><li>Пункт 2</li></ul>",
     "uk": "<h3>📖 Інструкція для роботи</h3><p>Тут буде повна інструкція для <b>україномовних</b> співробітників. Її можна буде редагувати за допомогою зручного редактора.</p>"
+  },
+  "managers": {
+    "mgr_anna_ru": {
+      "name": "Анна (RU/KZ)",
+      "telegram": "@anna_hr_chaterlab",
+      "whatsapp": "+7 700 123 45 67"
+    },
+    "mgr_ivan_ru": {
+      "name": "Иван (RU/KZ)",
+      "telegram": "@ivan_hr_chaterlab",
+      "whatsapp": "+7 700 765 43 21"
+    },
+    "mgr_john_ph": {
+      "name": "John (Philippines)",
+      "telegram": "@john_hr_ph",
+      "whatsapp": "+63 917 123 4567"
+    },
+    "mgr_maria_ph": {
+      "name": "Maria (Philippines)",
+      "telegram": "@maria_hr_ph",
+      "whatsapp": "+63 917 765 4321"
+    }
   }
 }
