@@ -18,40 +18,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // --- MIDDLEWARE ---
-// Обновлено: поддержка нескольких фронтенд-доменов (новый Vercel + локальная разработка)
-const allowedOrigins = [
-    'https://frontendnew-swart.vercel.app',
-    'https://glittering-panda-de3dbb.netlify.app',
-    'https://frontendnew-swart.vercel.app/',
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:5500'
-];
-
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-        return callback(new Error('CORS: Origin not allowed'));
-    },
-    methods: ['GET', 'POST', 'OPTIONS', 'PATCH', 'DELETE'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-// Явно обрабатываем preflight-запросы для всех маршрутов
-app.options('*', cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-        return callback(new Error('CORS: Origin not allowed'));
-    },
-    methods: ['GET', 'POST', 'OPTIONS', 'PATCH', 'DELETE'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+// ИЗМЕНЕНО: Указан конкретный URL вашего фронтенда для безопасности
+const frontendURL = 'https://frontendnew-swart.vercel.app';
+app.use(cors({ origin: frontendURL, methods: ['GET', 'POST', 'OPTIONS', 'PATCH', 'DELETE'], credentials: true }));
 
 app.use(bodyParser.json());
 
