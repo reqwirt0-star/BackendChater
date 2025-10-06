@@ -143,6 +143,64 @@ app.post('/update-content', verifyTokenAndRole(managerOnly), async (req, res) =>
     }
 });
 
+// --- Notifications API ---
+// Assumes Supabase tables 'notifications' and 'user_notifications' already exist
+
+// Publish a new notification (manager only)
+app.post('/api/notifications/publish', verifyTokenAndRole(managerOnly), async (req, res) => {
+    try {
+        const { title, body, is_critical = false, languages = ['ru','en','uk'], is_active = true } = req.body || {};
+        if (!title || !body || !Array.isArray(languages) || languages.length === 0) {
+            return res.status(400).json({ message: 'invalid_data_format' });
+        }
+        const payload = { title, body, is_critical, languages, is_active };
+        await axios.post(`${SUPABASE_URL}/rest/v1/notifications`, payload, { headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } });
+        res.status(201).json({ success: true });
+    } catch (error) {
+        console.error('Error publishing notification:', error?.response?.data || error);
+        res.status(500).json({ message: 'server_error' });
+    }
+});
+
+// List notifications for current user with read-status
+app.get('/api/notifications', verifyTokenAndRole(anyUser), async (req, res) => {
+    try {
+        const username = req.user.username;
+        // get user id
+        const { data: users } = await axios.get(`${SUPABASE_URL}/rest/v1/users?select=id&username=eq.${username}`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+        if (!users || users.length === 0) return res.status(404).json({ message: 'user_not_found' });
+        const userId = users[0].id;
+        // fetch active notifications
+        const { data: notes } = await axios.get(`${SUPABASE_URL}/rest/v1/notifications?select=id,title,body,is_critical,languages,is_active,created_at&is_active=eq.true&order=created_at.desc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+        // fetch read statuses
+        const { data: reads } = await axios.get(`${SUPABASE_URL}/rest/v1/user_notifications?select=notification_id,read_at&user_id=eq.${userId}`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+        const readMap = new Map((reads||[]).map(r => [r.notification_id, r.read_at]));
+        const result = (notes||[]).map(n => ({ ...n, is_read: readMap.has(n.id), read_at: readMap.get(n.id) || null }));
+        res.status(200).json({ notifications: result });
+    } catch (error) {
+        console.error('Error fetching notifications:', error?.response?.data || error);
+        res.status(500).json({ message: 'server_error' });
+    }
+});
+
+// Mark a notification as read for current user
+app.post('/api/notifications/read', verifyTokenAndRole(anyUser), async (req, res) => {
+    try {
+        const { notification_id } = req.body || {};
+        if (!notification_id) return res.status(400).json({ message: 'invalid_data_format' });
+        const username = req.user.username;
+        const { data: users } = await axios.get(`${SUPABASE_URL}/rest/v1/users?select=id&username=eq.${username}`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } });
+        if (!users || users.length === 0) return res.status(404).json({ message: 'user_not_found' });
+        const userId = users[0].id;
+        // upsert read status
+        await axios.post(`${SUPABASE_URL}/rest/v1/user_notifications`, { user_id: userId, notification_id, read_at: new Date().toISOString() }, { headers: { 'Prefer': 'resolution=merge-duplicates', 'Content-Type': 'application/json', 'apikey': SUPABASE_SERVICE_KEY, 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` } });
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error marking notification read:', error?.response?.data || error);
+        res.status(500).json({ message: 'server_error' });
+    }
+});
+
 app.get('/api/analytics', verifyTokenAndRole(managerOnly), async (req, res) => {
     try {
         const period = req.query.period || 'day';
